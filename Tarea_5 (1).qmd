@@ -1,0 +1,639 @@
+---
+title: "Tarea 5. Diferenciación e integración numérica."
+author: "Jesús Leonardo Villanueva Barrón"
+format: 
+  html:
+    grid: 
+      body-width: 1000px
+editor: visual
+jupyter: python3
+---
+
+Importamos packages y funciones necesarias:
+
+```{python}
+#| code-fold: true
+
+import matplotlib.pyplot as plt
+import numpy as np
+import math
+
+import plotly.graph_objects as go
+from scipy.differentiate import derivative
+import numdifftools as nd
+from scipy import integrate
+import pandas as pd
+```
+
+# Ejercicio 1.
+
+Para cada una de las siguientes funciones:
+
+-   Realiza la respectiva gráfica en el intervalo dado.
+
+-   Compara las gráficas de las derivadas aproximadas de la función `derivative` de `Scipy`, con dos tamaños de paso utilizando la función `nd.Derivative` (con `order =2` y `order = 4`, con las opciones de `method`: `forward`, `backward`, `central`) y la derivada *exacta* en tal intervalo.
+
+-   Compara las gráficas de las segundas derivadas aproximadas con dos tamaños de paso utilizando la función `nd.Derivative` y la segunda derivada *exacta* en tal intervalo.
+
+-   Realiza las gráficas de los errores absolutos en cada caso.
+
+Para no repetir código, definimos una función auxiliar que recibe la función $f$, su derivada exacta, su segunda derivada exacta y el intervalo, y genera todas las gráficas solicitadas. Se utilizan dos tamaños de paso $h_1=0.1$ y $h_2=0.01$, los órdenes `order = 2` y `order = 4`, y los tres métodos (`central`, `forward`, `backward`). Para la primera derivada se incluye además la aproximación de `scipy.differentiate.derivative` (que aproxima únicamente la primera derivada).
+
+```{python}
+#| code-fold: true
+
+# Dos tamaños de paso y configuraciones a comparar
+H = [0.1, 0.01]
+ORDENES = [2, 4]
+METODOS = ["central", "forward", "backward"]
+
+
+def estudiar_derivadas(nombre, f, df_exacta, d2f_exacta, a, b, x0=None, n=400):
+    """Genera las gráficas de f, de sus derivadas aproximadas/exactas y de los
+    errores absolutos. x0 permite iniciar la malla de derivación lejos de una
+    singularidad en el extremo a (por ejemplo en f(x)=sqrt(x) sen(x^2))."""
+
+    x = np.linspace(a, b, n)
+    xd = np.linspace(a if x0 is None else x0, b, n)  # malla para derivar
+
+    # --- Gráfica de la función ---
+    plt.figure(figsize=(8, 5))
+    plt.plot(x, f(x), color="black")
+    plt.title(f"Función {nombre}")
+    plt.xlabel("x"); plt.ylabel("f(x)")
+    plt.grid()
+    plt.show()
+
+    # =====================  PRIMERA DERIVADA  =====================
+    dscipy = derivative(f, xd).df          # primera derivada con SciPy
+    dexacta = df_exacta(xd)
+
+    for metodo in METODOS:
+        fig, ax = plt.subplots(1, 2, figsize=(12, 4.5))
+        # Panel izquierdo: valores
+        ax[0].plot(xd, dexacta, color="black", lw=2.5, label="exacta")
+        ax[0].plot(xd, dscipy, "--", label="scipy.derivative")
+        # Panel derecho: error absoluto
+        ax[1].semilogy(xd, np.abs(dscipy - dexacta), "--", label="scipy.derivative")
+
+        for h in H:
+            for order in ORDENES:
+                g = nd.Derivative(f, step=h, method=metodo, order=order, n=1)
+                aprox = g(xd)
+                etiqueta = f"nd h={h}, order={order}"
+                ax[0].plot(xd, aprox, alpha=0.7, label=etiqueta)
+                ax[1].semilogy(xd, np.abs(aprox - dexacta), alpha=0.8, label=etiqueta)
+
+        ax[0].set_title(f"1ª derivada de {nombre} — método '{metodo}'")
+        ax[0].set_xlabel("x"); ax[0].set_ylabel("f'(x)")
+        ax[0].grid(); ax[0].legend(fontsize=8)
+        ax[1].set_title(f"Error absoluto |aprox - exacta| — método '{metodo}'")
+        ax[1].set_xlabel("x"); ax[1].set_ylabel("error abs.")
+        ax[1].grid(which="both"); ax[1].legend(fontsize=8)
+        plt.tight_layout()
+        plt.show()
+
+    # =====================  SEGUNDA DERIVADA  =====================
+    d2exacta = d2f_exacta(xd)
+
+    for metodo in METODOS:
+        fig, ax = plt.subplots(1, 2, figsize=(12, 4.5))
+        ax[0].plot(xd, d2exacta, color="black", lw=2.5, label="exacta")
+
+        for h in H:
+            for order in ORDENES:
+                g2 = nd.Derivative(f, step=h, method=metodo, order=order, n=2)
+                aprox = g2(xd)
+                etiqueta = f"nd h={h}, order={order}"
+                ax[0].plot(xd, aprox, alpha=0.7, label=etiqueta)
+                ax[1].semilogy(xd, np.abs(aprox - d2exacta), alpha=0.8, label=etiqueta)
+
+        ax[0].set_title(f"2ª derivada de {nombre} — método '{metodo}'")
+        ax[0].set_xlabel("x"); ax[0].set_ylabel("f''(x)")
+        ax[0].grid(); ax[0].legend(fontsize=8)
+        ax[1].set_title(f"Error absoluto 2ª derivada — método '{metodo}'")
+        ax[1].set_xlabel("x"); ax[1].set_ylabel("error abs.")
+        ax[1].grid(which="both"); ax[1].legend(fontsize=8)
+        plt.tight_layout()
+        plt.show()
+```
+
+## a) $f(x)=e^{2x}-\cos 2x$, $x\in [0,2]$
+
+Derivadas exactas: $f'(x)=2e^{2x}+2\operatorname{sen}(2x)$ y $f''(x)=4e^{2x}+4\cos(2x)$.
+
+```{python}
+#| code-fold: true
+#| fig-align: "center"
+
+f   = lambda x: np.exp(2*x) - np.cos(2*x)
+df  = lambda x: 2*np.exp(2*x) + 2*np.sin(2*x)
+d2f = lambda x: 4*np.exp(2*x) + 4*np.cos(2*x)
+
+estudiar_derivadas("a) $e^{2x}-\\cos 2x$", f, df, d2f, 0, 2)
+```
+
+## b) $f(x)=\log(x+2)-(x+1)^2$, $x\in [0,5]$
+
+Con $\log = \ln$, las derivadas exactas son $f'(x)=\dfrac{1}{x+2}-2(x+1)$ y $f''(x)=-\dfrac{1}{(x+2)^2}-2$.
+
+```{python}
+#| code-fold: true
+#| fig-align: "center"
+
+f   = lambda x: np.log(x+2) - (x+1)**2
+df  = lambda x: 1/(x+2) - 2*(x+1)
+d2f = lambda x: -1/(x+2)**2 - 2
+
+estudiar_derivadas("b) $\\log(x+2)-(x+1)^2$", f, df, d2f, 0, 5)
+```
+
+## c) $f(x)=\sqrt{x}\,\operatorname{sen}(x^2)$, $x\in [0,\pi]$
+
+Derivadas exactas:
+$$f'(x)=\frac{\operatorname{sen}(x^2)}{2\sqrt{x}}+2x^{3/2}\cos(x^2),$$
+$$f''(x)=-\frac{1}{4}x^{-3/2}\operatorname{sen}(x^2)+4\sqrt{x}\cos(x^2)-4x^{5/2}\operatorname{sen}(x^2).$$
+Como $f'$ y $f''$ tienen una singularidad en $x=0$, la malla para derivar se inicia en $x_0=0.3$.
+
+```{python}
+#| code-fold: true
+#| fig-align: "center"
+
+f   = lambda x: np.sqrt(x) * np.sin(x**2)
+df  = lambda x: np.sin(x**2)/(2*np.sqrt(x)) + 2*x**1.5*np.cos(x**2)
+d2f = lambda x: -0.25*x**(-1.5)*np.sin(x**2) + 4*np.sqrt(x)*np.cos(x**2) - 4*x**2.5*np.sin(x**2)
+
+estudiar_derivadas("c) $\\sqrt{x}\\,sen(x^2)$", f, df, d2f, 0, np.pi, x0=0.3)
+```
+
+## d) $f(x)=(\cos 3x)^2-e^{2x}$, $x\in [0,\pi/2]$
+
+Usando $2\cos(3x)\operatorname{sen}(3x)=\operatorname{sen}(6x)$, las derivadas exactas son
+$f'(x)=-3\operatorname{sen}(6x)-2e^{2x}$ y $f''(x)=-18\cos(6x)-4e^{2x}$.
+
+```{python}
+#| code-fold: true
+#| fig-align: "center"
+
+f   = lambda x: np.cos(3*x)**2 - np.exp(2*x)
+df  = lambda x: -3*np.sin(6*x) - 2*np.exp(2*x)
+d2f = lambda x: -18*np.cos(6*x) - 4*np.exp(2*x)
+
+estudiar_derivadas("d) $(\\cos 3x)^2-e^{2x}$", f, df, d2f, 0, np.pi/2)
+```
+
+
+# Ejercicio 2
+
+Elige 3 indicadores económicos del INEGI (del archivo `TIE_Inegi_long.xlsx`), realiza la gráfica de la serie temporal y de su derivada. Brinda un análisis de la gráfica y de la evolución del indicador a lo largo del tiempo.
+
+Primero cargamos el archivo y revisamos su estructura (nombres de columnas e indicadores disponibles). El archivo está en formato *long*, por lo que típicamente tiene una columna con el nombre del indicador, una con la fecha y otra con el valor. **Ajusta los nombres de las columnas y de los indicadores según lo que muestre tu archivo.**
+
+```{python}
+#| code-fold: true
+
+inegi = pd.read_excel("TIE_Inegi_long.xlsx")
+print("Columnas:", inegi.columns.tolist())
+print()
+print(inegi.head())
+```
+
+```{python}
+#| code-fold: true
+#| fig-align: "center"
+
+# --- AJUSTA ESTOS NOMBRES a los de tu archivo ---
+col_indicador = "Indicador"   # columna con el nombre del indicador
+col_fecha     = "Fecha"       # columna con la fecha
+col_valor     = "Valor"       # columna con el valor numérico
+
+# Indicadores disponibles (descomenta para verlos):
+# print(inegi[col_indicador].unique())
+
+# Elige 3 indicadores (reemplaza por nombres reales de tu archivo)
+indicadores = inegi[col_indicador].dropna().unique()[:3]
+
+for ind in indicadores:
+    sub = inegi[inegi[col_indicador] == ind].copy()
+    sub[col_fecha] = pd.to_datetime(sub[col_fecha])
+    sub = sub.sort_values(col_fecha)
+
+    t = np.arange(len(sub))          # índice temporal (paso uniforme = 1 periodo)
+    y = sub[col_valor].to_numpy(dtype=float)
+
+    # Derivada numérica respecto al índice temporal
+    dy = np.gradient(y, t)
+
+    fig, ax = plt.subplots(1, 2, figsize=(13, 4.5))
+    ax[0].plot(sub[col_fecha], y, color="steelblue")
+    ax[0].set_title(f"Serie temporal: {ind}")
+    ax[0].set_xlabel("fecha"); ax[0].set_ylabel("valor")
+    ax[0].grid()
+    ax[0].tick_params(axis="x", rotation=45)
+
+    ax[1].plot(sub[col_fecha], dy, color="firebrick")
+    ax[1].axhline(0, color="black", lw=1, ls="--")
+    ax[1].set_title(f"Derivada (tasa de cambio): {ind}")
+    ax[1].set_xlabel("fecha"); ax[1].set_ylabel("d(valor)/d(periodo)")
+    ax[1].grid()
+    ax[1].tick_params(axis="x", rotation=45)
+
+    plt.tight_layout()
+    plt.show()
+```
+
+**Análisis.** La gráfica de la serie temporal muestra el nivel del indicador en cada periodo, mientras que la gráfica de la derivada (calculada con `np.gradient`, equivalente a una diferencia central) muestra su *tasa de cambio*: cuando la derivada es positiva el indicador está creciendo, cuando es negativa está disminuyendo, y los cruces por cero corresponden a máximos o mínimos locales de la serie. Los picos de la derivada (en valor absoluto) señalan los periodos de variación más abrupta —por ejemplo, caídas o repuntes asociados a episodios de crisis o recuperación económica—, mientras que los tramos donde la derivada permanece cercana a cero corresponden a periodos de estabilidad. *(Reemplaza este párrafo con la interpretación específica de los tres indicadores que hayas elegido.)*
+
+
+# Ejercicio 3
+
+Calcular el valor exacto y las aproximaciones numéricas de la siguiente integral:
+
+\begin{equation}
+\int_0^4 x^2e^{-x} dx    
+\end{equation}
+
+El valor *exacto* se obtiene de forma simbólica con `sympy`. La antiderivada es $-e^{-x}(x^2+2x+2)$, por lo que el valor exacto es $2-26e^{-4}$. Se compara con la cuadratura adaptativa `integrate.quad`, la regla del trapecio y la regla de Simpson.
+
+```{python}
+#| code-fold: true
+
+import sympy as sp
+
+# Valor exacto (simbólico)
+xs = sp.symbols("x")
+valor_exacto = sp.integrate(xs**2 * sp.exp(-xs), (xs, 0, 4))
+valor_exacto_num = float(valor_exacto)
+
+g = lambda x: x**2 * np.exp(-x)
+
+# 1) Cuadratura adaptativa de SciPy
+val_quad, err_quad = integrate.quad(g, 0, 4)
+
+# 2) Regla del trapecio y 3) regla de Simpson (sobre una malla fina)
+N = 1000
+x_malla = np.linspace(0, 4, N+1)
+y_malla = g(x_malla)
+val_trap = integrate.trapezoid(y_malla, x_malla)
+val_simp = integrate.simpson(y_malla, x=x_malla)
+
+tabla = pd.DataFrame({
+    "Método": ["Exacto (sympy)", "quad (SciPy)", "Trapecio", "Simpson"],
+    "Valor": [valor_exacto_num, val_quad, val_trap, val_simp],
+    "Error absoluto": [0.0,
+                       abs(val_quad - valor_exacto_num),
+                       abs(val_trap - valor_exacto_num),
+                       abs(val_simp - valor_exacto_num)]
+})
+print(f"Valor exacto = 2 - 26 e^(-4) = {valor_exacto_num:.10f}\n")
+tabla
+```
+
+```{python}
+#| code-fold: true
+#| fig-align: "center"
+
+x_plot = np.linspace(0, 4, 400)
+plt.figure(figsize=(8, 5))
+plt.plot(x_plot, g(x_plot), color="black", label=r"$x^2 e^{-x}$")
+plt.fill_between(x_plot, g(x_plot), alpha=0.4, color="teal",
+                 label=f"Área ≈ {val_quad:.4f}")
+plt.xlabel("x"); plt.ylabel("f(x)")
+plt.legend(); plt.grid()
+plt.show()
+```
+
+
+# Ejericicio 4
+
+Aproximar las siguientes integrales con la función `integrate.quad` (de SciPy) y con el método de Montecarlo, en cada caso hacer una gráfica de la función e indicar el área bajo la curva.
+
+Definimos una función auxiliar para el método de Montecarlo en un intervalo finito $[a,b]$: se generan $N$ puntos uniformes y se estima $\int_a^b f\,dx \approx (b-a)\,\overline{f}$. Para las integrales impropias se trunca el intervalo en un valor donde el integrando es despreciable.
+
+```{python}
+#| code-fold: true
+
+rng = np.random.default_rng(0)
+
+def montecarlo(f, a, b, N=100_000):
+    muestras = rng.uniform(a, b, N)
+    return (b - a) * np.mean(f(muestras))
+
+def graficar_area(f, a, b, titulo, val, a_plot=None, b_plot=None):
+    a_plot = a if a_plot is None else a_plot
+    b_plot = b if b_plot is None else b_plot
+    x = np.linspace(a_plot, b_plot, 500)
+    plt.figure(figsize=(8, 5))
+    plt.plot(x, f(x), color="black")
+    # Sombrear sólo la región de integración (intersección con la ventana)
+    xs = np.linspace(max(a, a_plot), min(b, b_plot), 500)
+    plt.fill_between(xs, f(xs), alpha=0.4, color="darkorange",
+                     label=f"Área ≈ {val:.6f}")
+    plt.title(titulo); plt.xlabel("x"); plt.ylabel("f(x)")
+    plt.legend(); plt.grid()
+    plt.show()
+```
+
+**a)** $\displaystyle\int_0^1 e^{-x^2}\,dx$
+
+```{python}
+#| code-fold: true
+#| fig-align: "center"
+
+f = lambda x: np.exp(-x**2)
+val_quad, _ = integrate.quad(f, 0, 1)
+val_mc = montecarlo(f, 0, 1)
+print(f"quad      = {val_quad:.8f}")
+print(f"Montecarlo = {val_mc:.8f}")
+graficar_area(f, 0, 1, r"$\int_0^1 e^{-x^2}dx$", val_quad)
+```
+
+**b)** $\displaystyle\int_0^\pi \operatorname{sen}(x^2)\,dx$
+
+```{python}
+#| code-fold: true
+#| fig-align: "center"
+
+f = lambda x: np.sin(x**2)
+val_quad, _ = integrate.quad(f, 0, np.pi)
+val_mc = montecarlo(f, 0, np.pi)
+print(f"quad      = {val_quad:.8f}")
+print(f"Montecarlo = {val_mc:.8f}")
+graficar_area(f, 0, np.pi, r"$\int_0^\pi sen(x^2)dx$", val_quad)
+```
+
+**c)** $\displaystyle\int_\pi^{3\pi} \frac{\operatorname{sen}(x)}{x}\,dx$
+
+```{python}
+#| code-fold: true
+#| fig-align: "center"
+
+f = lambda x: np.sin(x)/x
+val_quad, _ = integrate.quad(f, np.pi, 3*np.pi)
+val_mc = montecarlo(f, np.pi, 3*np.pi)
+print(f"quad      = {val_quad:.8f}")
+print(f"Montecarlo = {val_mc:.8f}")
+graficar_area(f, np.pi, 3*np.pi, r"$\int_\pi^{3\pi} \frac{sen(x)}{x}dx$", val_quad)
+```
+
+**d)** $\displaystyle\int_0^\infty e^{-x^2}\cos(x)\,dx$ (valor exacto $\tfrac{\sqrt{\pi}}{2}e^{-1/4}$)
+
+```{python}
+#| code-fold: true
+#| fig-align: "center"
+
+f = lambda x: np.exp(-x**2)*np.cos(x)
+val_quad, _ = integrate.quad(f, 0, np.inf)
+# Montecarlo: el integrando es despreciable más allá de x≈6, se trunca ahí
+val_mc = montecarlo(f, 0, 6)
+exacto = np.sqrt(np.pi)/2 * np.exp(-0.25)
+print(f"quad       = {val_quad:.8f}")
+print(f"Montecarlo  = {val_mc:.8f}")
+print(f"Exacto      = {exacto:.8f}")
+graficar_area(f, 0, 6, r"$\int_0^\infty e^{-x^2}\cos(x)dx$", val_quad, 0, 6)
+```
+
+**e)** $\displaystyle\int_0^1 x^x\,dx$
+
+```{python}
+#| code-fold: true
+#| fig-align: "center"
+
+f = lambda x: x**x
+val_quad, _ = integrate.quad(f, 0, 1)
+val_mc = montecarlo(f, 1e-12, 1)   # evitar 0^0 numéricamente
+print(f"quad      = {val_quad:.8f}")
+print(f"Montecarlo = {val_mc:.8f}")
+graficar_area(f, 1e-3, 1, r"$\int_0^1 x^x dx$", val_quad)
+```
+
+**f)** $\displaystyle\int_1^5 e^{-x^2} x^3\,dx$
+
+```{python}
+#| code-fold: true
+#| fig-align: "center"
+
+f = lambda x: np.exp(-x**2)*x**3
+val_quad, _ = integrate.quad(f, 1, 5)
+val_mc = montecarlo(f, 1, 5)
+print(f"quad      = {val_quad:.8f}")
+print(f"Montecarlo = {val_mc:.8f}")
+graficar_area(f, 1, 5, r"$\int_1^5 e^{-x^2}x^3 dx$", val_quad)
+```
+
+**g)** $\displaystyle\int_0^\infty \frac{x}{e^x-1}\,dx$ (valor exacto $\tfrac{\pi^2}{6}$)
+
+```{python}
+#| code-fold: true
+#| fig-align: "center"
+
+# En x=0 el integrando tiende a 1; usamos expm1 y definimos el límite
+def f(x):
+    x = np.asarray(x, dtype=float)
+    return np.where(x == 0, 1.0, x/np.expm1(x))
+
+val_quad, _ = integrate.quad(f, 0, np.inf)
+val_mc = montecarlo(f, 1e-9, 40)   # despreciable más allá de x≈40
+exacto = np.pi**2/6
+print(f"quad       = {val_quad:.8f}")
+print(f"Montecarlo  = {val_mc:.8f}")
+print(f"Exacto π²/6 = {exacto:.8f}")
+graficar_area(f, 0, 40, r"$\int_0^\infty \frac{x}{e^x-1}dx$", val_quad, 0, 20)
+```
+
+**h)** $\displaystyle\int_0^1 \frac{1}{\sqrt{x^4+1}}\,dx$
+
+```{python}
+#| code-fold: true
+#| fig-align: "center"
+
+f = lambda x: 1/np.sqrt(x**4 + 1)
+val_quad, _ = integrate.quad(f, 0, 1)
+val_mc = montecarlo(f, 0, 1)
+print(f"quad      = {val_quad:.8f}")
+print(f"Montecarlo = {val_mc:.8f}")
+graficar_area(f, 0, 1, r"$\int_0^1 \frac{1}{\sqrt{x^4+1}}dx$", val_quad)
+```
+
+
+# Ejercicio 5
+
+Aproximar las siguientes integrales dobles y triples, llevar a cabo la gráfica cuando se indique y comparar con el valor *exacto* de la integral.
+
+## a) (con gráfica)
+
+\begin{equation}
+\int_{-1}^{1}\int_1^2 (3y^2-x^2+5)\, dx\, dy
+\end{equation}
+
+Con `integrate.dblquad` se integra `func(x, y)` con $x\in[1,2]$ (interior) e $y\in[-1,1]$ (exterior). El valor exacto es $\tfrac{22}{3}$.
+
+```{python}
+#| code-fold: true
+#| fig-align: "center"
+
+# dblquad(func, a, b, gfun, hfun): func(x_interior, y_exterior),
+# y de a..b, x de gfun(y)..hfun(y)
+val, err = integrate.dblquad(lambda x, y: 3*y**2 - x**2 + 5, -1, 1, 1, 2)
+exacto = 22/3
+print(f"dblquad = {val:.8f}   exacto = {exacto:.8f}   error = {abs(val-exacto):.2e}")
+
+# Gráfica de la superficie del integrando sobre la región
+xx = np.linspace(1, 2, 60)
+yy = np.linspace(-1, 1, 60)
+X, Y = np.meshgrid(xx, yy)
+Z = 3*Y**2 - X**2 + 5
+
+fig = plt.figure(figsize=(8, 6))
+ax = fig.add_subplot(111, projection="3d")
+ax.plot_surface(X, Y, Z, cmap="viridis", alpha=0.9)
+ax.set_xlabel("x"); ax.set_ylabel("y"); ax.set_zlabel("f(x,y)")
+ax.set_title(r"$f(x,y)=3y^2-x^2+5$")
+plt.show()
+```
+
+## b)
+
+\begin{equation}
+\int_{0}^{6}\int_1^5 \sqrt{x+4y}\, dx\, dy
+\end{equation}
+
+```{python}
+#| code-fold: true
+
+val, err = integrate.dblquad(lambda x, y: np.sqrt(x + 4*y), 0, 6, 1, 5)
+print(f"dblquad = {val:.8f}")
+```
+
+## c)
+
+\begin{equation}
+\int_{1}^{e}\int_0^{\log(x)} x^3 \, dy\, dx
+\end{equation}
+
+Se interpreta como integración interior en $y\in[0,\ln x]$ y exterior en $x\in[1,e]$, es decir $\int_1^e x^3\ln x\,dx$, cuyo valor exacto es $\tfrac{3e^4+1}{16}$.
+
+```{python}
+#| code-fold: true
+
+# func(y, x): y de gfun(x)..hfun(x), x de 1..e
+val, err = integrate.dblquad(lambda y, x: x**3, 1, np.e, 0, lambda x: np.log(x))
+exacto = (3*np.e**4 + 1)/16
+print(f"dblquad = {val:.8f}   exacto = {exacto:.8f}   error = {abs(val-exacto):.2e}")
+```
+
+## d)
+
+\begin{equation}
+\int\int_D 30y\,e^x\, dx\, dy
+\end{equation}
+
+Donde $D\subset \mathbb{R}^2$ es la región en la siguiente gráfica.
+
+```{python}
+#| code-fold: true
+#| fig-align: 'center'
+
+x_val = np.array([0, 4])
+y_val1 = np.array([0, 1])
+y_val2 = np.array([0, 4])
+
+plt.figure(figsize=(8, 6))
+plt.plot(x_val, y_val1, label=r"$y=x/4$")
+plt.plot(x_val, y_val2, label=r"$y=x$")
+plt.fill_between(x_val, y1=y_val1, y2=y_val2, color="firebrick", alpha=0.5)
+plt.legend(); plt.grid()
+plt.show()
+```
+
+La región es $D=\{(x,y): 0\le x\le 4,\ \tfrac{x}{4}\le y\le x\}$, por lo que la integral es $\int_0^4\int_{x/4}^{x} 30y\,e^x\,dy\,dx$. El valor exacto es $\tfrac{225}{16}(10e^4-2)$.
+
+```{python}
+#| code-fold: true
+
+val, err = integrate.dblquad(lambda y, x: 30*y*np.exp(x),
+                             0, 4, lambda x: x/4, lambda x: x)
+exacto = (225/16)*(10*np.e**4 - 2)
+print(f"dblquad = {val:.6f}   exacto = {exacto:.6f}   error = {abs(val-exacto):.2e}")
+```
+
+## e)
+
+\begin{equation}
+\int\int \int_B z\, e^{x+y}\, dx\, dy\, dz, \quad B=[0,1] \times [0,1] \times [0,1]
+\end{equation}
+
+El valor exacto es $\tfrac{(e-1)^2}{2}$.
+
+```{python}
+#| code-fold: true
+
+# tplquad(func, a, b, gfun, hfun, qfun, rfun): func(z, y, x)
+val, err = integrate.tplquad(lambda z, y, x: z*np.exp(x+y),
+                             0, 1, 0, 1, 0, 1)
+exacto = (np.e - 1)**2 / 2
+print(f"tplquad = {val:.8f}   exacto = {exacto:.8f}   error = {abs(val-exacto):.2e}")
+```
+
+## f)
+
+\begin{equation}
+\int_0^1 \int_0^x \int_0^y (y+xz)\, dz\, dy\, dx
+\end{equation}
+
+El valor exacto es $\tfrac{7}{60}$.
+
+```{python}
+#| code-fold: true
+
+# func(z, y, x): x de 0..1, y de 0..x, z de 0..y
+val, err = integrate.tplquad(lambda z, y, x: y + x*z,
+                             0, 1, 0, lambda x: x, 0, lambda x, y: y)
+exacto = 7/60
+print(f"tplquad = {val:.8f}   exacto = {exacto:.8f}   error = {abs(val-exacto):.2e}")
+```
+
+
+# Ejercicio 6
+
+De `scipy.stats` elige 5 distribuciones continuas diferentes de probabilidad continua, realiza la gráfica y encuentra la probabilidad que la variable aleatoria tome un valor en un intervalo dado. Compara el resultado con el método `cdf`.
+
+Se eligen cinco distribuciones: **normal**, **exponencial**, **gamma**, **beta** y **chi-cuadrada**. Para cada una se grafica la densidad, se sombrea el intervalo $[a,b]$ y se compara $P(a<X<b)$ calculada por integración (`integrate.quad` de la densidad) con el resultado de `cdf(b)-cdf(a)`.
+
+```{python}
+#| code-fold: true
+#| fig-align: "center"
+
+from scipy import stats
+
+# (nombre, distribución congelada, intervalo [a,b], rango de graficación)
+distribuciones = [
+    ("Normal(0,1)",       stats.norm(loc=0, scale=1),     (-1, 1),   (-4, 4)),
+    ("Exponencial(λ=1)",  stats.expon(scale=1),           (0.5, 2),  (0, 6)),
+    ("Gamma(k=2, θ=1)",   stats.gamma(a=2, scale=1),      (1, 4),    (0, 10)),
+    ("Beta(2,5)",         stats.beta(a=2, b=5),           (0.2, 0.5),(0, 1)),
+    ("Chi²(k=3)",         stats.chi2(df=3),               (1, 5),    (0, 12)),
+]
+
+for nombre, dist, (a, b), (xi, xf) in distribuciones:
+    x = np.linspace(xi, xf, 500)
+    pdf = dist.pdf(x)
+
+    # P(a<X<b) por integración numérica de la densidad
+    p_quad, _ = integrate.quad(dist.pdf, a, b)
+    # P(a<X<b) con la función de distribución acumulada
+    p_cdf = dist.cdf(b) - dist.cdf(a)
+
+    plt.figure(figsize=(8, 5))
+    plt.plot(x, pdf, color="black", label="densidad")
+    xs = np.linspace(a, b, 300)
+    plt.fill_between(xs, dist.pdf(xs), alpha=0.4, color="mediumpurple",
+                     label=f"P({a}<X<{b})")
+    plt.title(f"{nombre}")
+    plt.xlabel("x"); plt.ylabel("f(x)")
+    plt.legend(); plt.grid()
+    plt.show()
+
+    print(f"{nombre}:  quad = {p_quad:.8f}   cdf(b)-cdf(a) = {p_cdf:.8f}   "
+          f"diferencia = {abs(p_quad - p_cdf):.2e}")
+```

@@ -1,6 +1,6 @@
 ---
 title: "Tarea 6. Ecuaciones diferenciales ordinarias."
-author: "Mi nombre"
+author: "Jesús Leonardo Villanueva Barrón"
 lang: es
 format: 
   html:
